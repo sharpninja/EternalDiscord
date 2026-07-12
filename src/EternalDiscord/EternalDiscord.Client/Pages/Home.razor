@@ -1,0 +1,657 @@
+﻿@page "/"
+@implements IAsyncDisposable
+@using EternalDiscord.Client.Services
+@using EternalDiscord.Contracts
+@using Microsoft.AspNetCore.Components.Forms
+@inject CommunityApiClient Api
+@inject NavigationManager Navigation
+@inject IJSRuntime JavaScript
+
+<PageTitle>Eternal Discord</PageTitle>
+
+<div class="discord-shell">
+    <nav class="server-rail" aria-label="Servers">
+        <button class="server-button server-button-primary" title="Eternal Discord" aria-label="Eternal Discord">ED</button>
+        <div class="rail-divider"></div>
+        <button class="server-button" title="Historical council" aria-label="Historical council">HC</button>
+        <button class="server-button" title="AI providers" aria-label="AI providers">AI</button>
+        <div class="rail-spacer"></div>
+        <button class="server-button" title="Add community" aria-label="Add community">+</button>
+    </nav>
+
+    <aside class="channel-sidebar">
+        <header class="community-header">
+            <div>
+                <span class="community-name">Eternal Discord</span>
+                <span class="community-subtitle">Public square</span>
+            </div>
+            <button class="icon-button" title="Community menu" aria-label="Community menu">...</button>
+        </header>
+
+        <div class="channel-scroll">
+            <section class="channel-group">
+                <div class="channel-group-label">
+                    <span>DISCUSSIONS</span>
+                    <button class="tiny-icon-button" title="New discussion" aria-label="New discussion">+</button>
+                </div>
+                <button class="channel active"><span aria-hidden="true">#</span> general</button>
+                <button class="channel"><span aria-hidden="true">#</span> philosophy</button>
+                <button class="channel"><span aria-hidden="true">#</span> science</button>
+                <button class="channel"><span aria-hidden="true">#</span> civic-life</button>
+            </section>
+
+            <section class="channel-group">
+                <div class="channel-group-label"><span>INFORMATION</span></div>
+                <button class="channel"><span aria-hidden="true">i</span> community-status</button>
+                <button class="channel"><span aria-hidden="true">?</span> provider-status</button>
+            </section>
+        </div>
+
+        <footer class="account-panel">
+            <div class="avatar avatar-user">@GetInitials(_user.DisplayName)</div>
+            <div class="account-copy">
+                <strong>@_user.DisplayName</strong>
+                <span>@GetAccountState()</span>
+            </div>
+            @if (_user.IsAuthenticated)
+            {
+                <button class="icon-button" title="Log out" aria-label="Log out" @onclick="LogoutAsync">x</button>
+            }
+            else
+            {
+                <button class="icon-button" title="Log in" aria-label="Log in" @onclick="ToggleLoginMenu">&#64;</button>
+            }
+        </footer>
+    </aside>
+
+    <main class="content-column">
+        <header class="channel-header">
+            <div class="channel-title">
+                <span class="hash-mark">#</span>
+                <strong>general</strong>
+                <span class="channel-description">Ideas outlive their authors.</span>
+            </div>
+            <div class="header-actions">
+                <label class="search-box">
+                    <span aria-hidden="true">?</span>
+                    <input placeholder="Search" @bind="_search" @bind:event="oninput" aria-label="Search discussions" />
+                </label>
+                <button class="icon-button" title="Refresh feed" aria-label="Refresh feed" @onclick="RefreshAsync" disabled="@_isRefreshing">R</button>
+                <button class="icon-button mobile-panel-toggle" title="Member panel" aria-label="Member panel" @onclick="ToggleMemberPanel">&#64;</button>
+            </div>
+        </header>
+
+        <div class="feed-scroll">
+            @if (_isLoading)
+            {
+                <div class="feed-state">
+                    <div class="loading-mark">ED</div>
+                    <span>Loading discussion...</span>
+                </div>
+            }
+            else
+            {
+                <section class="channel-intro">
+                    <div class="intro-icon">#</div>
+                    <h1>general</h1>
+                    <p>Public conversations with a rotating council of historical perspectives.</p>
+                </section>
+
+                @if (_user.IsBanned)
+                {
+                    <div class="notice notice-danger">
+                        <strong>Account restricted</strong>
+                        <span>@_user.BanReason</span>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_notice))
+                {
+                    <div class="notice @(_noticeIsError ? "notice-danger" : "notice-success")">
+                        <span>@_notice</span>
+                        <button class="icon-button" aria-label="Dismiss notice" title="Dismiss" @onclick="DismissNotice">x</button>
+                    </div>
+                }
+
+                <div class="message-feed">
+                    @foreach (var post in FilteredPosts())
+                    {
+                        <article class="post-thread" id="@($"post-{post.Id:N}")" @key="post.Id">
+                            <div class="message post-message">
+                                <div class="avatar @GetAvatarClass(post.Author)">@post.Author.Initials</div>
+                                <div class="message-body">
+                                    <div class="message-meta">
+                                        <strong>@post.Author.DisplayName</strong>
+                                        @if (post.Author.IsAi)
+                                        {
+                                            <span class="bot-badge">AI</span>
+                                        }
+                                        <time datetime="@post.CreatedAt.ToString("O")">@FormatRelative(post.CreatedAt)</time>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(post.Topic))
+                                    {
+                                        <span class="topic-label">#@post.Topic</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(post.Title))
+                                    {
+                                        <h2>@post.Title</h2>
+                                    }
+                                    <p class="message-content">@post.Content</p>
+                                    <div class="message-actions">
+                                        <button class="vote-button @(post.UserVote == 1 ? "selected" : null)"
+                                                title="Upvote"
+                                                aria-label="Upvote post"
+                                                disabled="@(!_user.IsAuthenticated || _busyVote)"
+                                                @onclick="() => VotePostAsync(post, 1)">
+                                            <span aria-hidden="true">^</span> @post.Upvotes
+                                        </button>
+                                        <button class="vote-button @(post.UserVote == -1 ? "selected negative" : null)"
+                                                title="Downvote"
+                                                aria-label="Downvote post"
+                                                disabled="@(!_user.IsAuthenticated || _busyVote)"
+                                                @onclick="() => VotePostAsync(post, -1)">
+                                            <span aria-hidden="true">v</span> @post.Downvotes
+                                        </button>
+                                        <button class="action-button" title="Share discussion" @onclick="() => OpenShare(post)">
+                                            <span aria-hidden="true">[]</span> Share
+                                        </button>
+                                        <span class="reply-count">@post.Replies.Count replies</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            @foreach (var reply in post.Replies)
+                            {
+                                <div class="message reply-message"
+                                     id="@($"reply-{reply.Id:N}")"
+                                     style="@($"--reply-depth:{GetReplyDepth(post, reply)}")"
+                                     @key="reply.Id">
+                                    <div class="reply-line" aria-hidden="true"></div>
+                                    <div class="avatar @GetAvatarClass(reply.Author)">@reply.Author.Initials</div>
+                                    <div class="message-body">
+                                        <div class="message-meta">
+                                            <strong>@reply.Author.DisplayName</strong>
+                                            <span class="bot-badge">AI</span>
+                                            <time datetime="@reply.CreatedAt.ToString("O")">@FormatRelative(reply.CreatedAt)</time>
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(reply.Author.Persona))
+                                        {
+                                            <span class="persona-label">@reply.Author.Persona</span>
+                                        }
+                                        <p class="message-content">@reply.Content</p>
+                                        <div class="message-actions">
+                                            <button class="vote-button @(reply.UserVote == 1 ? "selected" : null)"
+                                                    title="Upvote"
+                                                    aria-label="Upvote reply"
+                                                    disabled="@(!_user.IsAuthenticated || _busyVote)"
+                                                    @onclick="() => VoteReplyAsync(reply, 1)">
+                                                <span aria-hidden="true">^</span> @reply.Upvotes
+                                            </button>
+                                            <button class="vote-button @(reply.UserVote == -1 ? "selected negative" : null)"
+                                                    title="Downvote"
+                                                    aria-label="Downvote reply"
+                                                    disabled="@(!_user.IsAuthenticated || _busyVote)"
+                                                    @onclick="() => VoteReplyAsync(reply, -1)">
+                                                <span aria-hidden="true">v</span> @reply.Downvotes
+                                            </button>
+                                            <button class="action-button" title="Share reply" @onclick="() => OpenShare(post, reply)">
+                                                <span aria-hidden="true">[]</span> Share
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </article>
+                    }
+
+                    @if (!FilteredPosts().Any())
+                    {
+                        <div class="feed-state compact">
+                            <strong>No discussions found</strong>
+                            <span>The channel is quiet right now.</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <footer class="composer-zone">
+            @if (_user.IsAuthenticated && !_user.IsBanned)
+            {
+                <EditForm Model="_draft" OnValidSubmit="CreatePostAsync" class="composer">
+                    <DataAnnotationsValidator />
+                    <div class="composer-fields">
+                        <input class="composer-title" placeholder="Title (optional)" maxlength="120" @bind="_draft.Title" />
+                        <input class="composer-topic" placeholder="Topic" maxlength="60" @bind="_draft.Topic" />
+                    </div>
+                    <div class="composer-main">
+                        <button type="button" class="composer-tool" title="Add attachment" aria-label="Add attachment" disabled>+</button>
+                        <textarea placeholder="Message #general"
+                                  maxlength="4000"
+                                  @bind="_draft.Content"
+                                  @bind:event="oninput"
+                                  aria-label="Post content"></textarea>
+                        <span class="character-count">@_draft.Content.Length/4000</span>
+                        <button type="submit"
+                                class="send-button"
+                                title="Post"
+                                aria-label="Post discussion"
+                                disabled="@(_isPosting || string.IsNullOrWhiteSpace(_draft.Content))">
+                            @(_isPosting ? "..." : ">")
+                        </button>
+                    </div>
+                </EditForm>
+            }
+            else if (!_user.IsBanned)
+            {
+                <button class="login-composer" @onclick="ToggleLoginMenu">
+                    <span>Log in to join #general</span>
+                    <strong>Continue</strong>
+                </button>
+            }
+
+            @if (_showLoginMenu)
+            {
+                <div class="login-menu">
+                    <div class="login-menu-header">
+                        <strong>Continue with</strong>
+                        <button class="icon-button" title="Close" aria-label="Close login menu" @onclick="ToggleLoginMenu">x</button>
+                    </div>
+                    @foreach (var provider in _providers)
+                    {
+                        @if (provider.IsConfigured)
+                        {
+                            <a class="provider-button" href="@GetLoginUrl(provider.Id)">
+                                <span class="provider-mark">@GetInitials(provider.DisplayName)</span>
+                                <span>@provider.DisplayName</span>
+                            </a>
+                        }
+                        else
+                        {
+                            <button class="provider-button" disabled>
+                                <span class="provider-mark">@GetInitials(provider.DisplayName)</span>
+                                <span>@provider.DisplayName</span>
+                                <small>Not configured</small>
+                            </button>
+                        }
+                    }
+                </div>
+            }
+        </footer>
+    </main>
+
+    <aside class="member-sidebar @(_showMemberPanel ? "open" : null)">
+        <header class="member-header">
+            <strong>Community</strong>
+            <button class="icon-button mobile-close" title="Close" aria-label="Close member panel" @onclick="ToggleMemberPanel">x</button>
+        </header>
+
+        <div class="member-scroll">
+            <section class="member-section">
+                <h2>AI PROVIDERS</h2>
+                @if (_aiStatus is null)
+                {
+                    <span class="sidebar-muted">Checking status...</span>
+                }
+                else
+                {
+                    @foreach (var provider in _aiStatus.Providers)
+                    {
+                        <div class="provider-row">
+                            <span class="status-dot @(provider.IsConfigured ? "online" : "fallback")"></span>
+                            <div>
+                                <strong>@provider.DisplayName</strong>
+                                <span>@provider.Mode</span>
+                            </div>
+                            @if (provider.IsActive)
+                            {
+                                <span class="default-tag">default</span>
+                            }
+                        </div>
+                    }
+                }
+            </section>
+
+            <section class="member-section">
+                <h2>HISTORICAL COUNCIL</h2>
+                @foreach (var member in CouncilMembers)
+                {
+                    <div class="member-row">
+                        <div class="avatar avatar-ai">@GetInitials(member)</div>
+                        <div>
+                            <strong>@member</strong>
+                            <span>AI simulation</span>
+                        </div>
+                    </div>
+                }
+            </section>
+
+            <section class="member-section profile-section">
+                <h2>PROFILE</h2>
+                <div class="profile-summary">
+                    <div class="avatar avatar-user large">@GetInitials(_user.DisplayName)</div>
+                    <div>
+                        <strong>@_user.DisplayName</strong>
+                        <span>@GetAccountState()</span>
+                    </div>
+                </div>
+                @if (_user.IsBanned)
+                {
+                    <div class="ban-state">Restricted</div>
+                }
+                else
+                {
+                    <div class="profile-state"><span class="status-dot online"></span> Active</div>
+                }
+            </section>
+        </div>
+    </aside>
+</div>
+
+@if (_showShareModal)
+{
+    <div class="modal-backdrop" @onclick="CloseShare">
+        <div class="share-modal" role="dialog" aria-modal="true" aria-labelledby="share-title" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h2 id="share-title">Share discussion</h2>
+                <button class="icon-button" title="Close" aria-label="Close share dialog" @onclick="CloseShare">x</button>
+            </div>
+            <div class="share-link-row">
+                <input value="@_shareUrl" readonly aria-label="Share link" />
+                <button class="primary-button" @onclick="CopyShareLinkAsync">Copy link</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly string[] CouncilMembers =
+    [
+        "Ada Lovelace",
+        "Marcus Aurelius",
+        "Frederick Douglass",
+        "Marie Curie",
+        "Leonardo da Vinci",
+        "Mary Wollstonecraft"
+    ];
+
+    private readonly CancellationTokenSource _lifetime = new();
+    private FeedDto _feed = new([], DateTimeOffset.UtcNow);
+    private CurrentUserDto _user = new(false, null, "Guest", false, null);
+    private AiStatusDto? _aiStatus;
+    private IReadOnlyList<AuthProviderDto> _providers = [];
+    private CreatePostRequest _draft = new();
+    private Task? _pollingTask;
+    private string _search = string.Empty;
+    private string? _notice;
+    private string _shareUrl = string.Empty;
+    private bool _noticeIsError;
+    private bool _isLoading = true;
+    private bool _isRefreshing;
+    private bool _isPosting;
+    private bool _busyVote;
+    private bool _showLoginMenu;
+    private bool _showMemberPanel;
+    private bool _showShareModal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllAsync();
+        _pollingTask = PollFeedAsync(_lifetime.Token);
+    }
+
+    private async Task LoadAllAsync()
+    {
+        try
+        {
+            var feedTask = Api.GetFeedAsync(_lifetime.Token);
+            var userTask = Api.GetCurrentUserAsync(_lifetime.Token);
+            var aiTask = Api.GetAiStatusAsync(_lifetime.Token);
+            var providerTask = Api.GetAuthProvidersAsync(_lifetime.Token);
+            await Task.WhenAll(feedTask, userTask, aiTask, providerTask);
+
+            _feed = await feedTask;
+            _user = await userTask;
+            _aiStatus = await aiTask;
+            _providers = await providerTask;
+        }
+        catch (Exception)
+        {
+            ShowNotice("The community service is unavailable.", true);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task PollFeedAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                _feed = await Api.GetFeedAsync(cancellationToken);
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch
+        {
+            await InvokeAsync(() =>
+            {
+                ShowNotice("Live updates paused.", true);
+                StateHasChanged();
+            });
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        _isRefreshing = true;
+        try
+        {
+            _feed = await Api.GetFeedAsync(_lifetime.Token);
+            _user = await Api.GetCurrentUserAsync(_lifetime.Token);
+        }
+        catch
+        {
+            ShowNotice("Refresh failed.", true);
+        }
+        finally
+        {
+            _isRefreshing = false;
+        }
+    }
+
+    private async Task CreatePostAsync()
+    {
+        if (_isPosting || string.IsNullOrWhiteSpace(_draft.Content))
+        {
+            return;
+        }
+
+        _isPosting = true;
+        DismissNotice();
+        try
+        {
+            var result = await Api.CreatePostAsync(_draft, _lifetime.Token);
+            if (!result.IsSuccess)
+            {
+                ShowNotice(result.Error?.Message ?? "Post failed.", true);
+                return;
+            }
+
+            _draft = new CreatePostRequest();
+            _feed = await Api.GetFeedAsync(_lifetime.Token);
+            ShowNotice("Discussion posted.", false);
+        }
+        catch
+        {
+            ShowNotice("Post failed.", true);
+        }
+        finally
+        {
+            _isPosting = false;
+        }
+    }
+
+    private Task VotePostAsync(PostDto post, int direction)
+    {
+        var value = post.UserVote == direction ? 0 : direction;
+        return VoteAsync(new VoteRequest("post", post.Id, value));
+    }
+
+    private Task VoteReplyAsync(ReplyDto reply, int direction)
+    {
+        var value = reply.UserVote == direction ? 0 : direction;
+        return VoteAsync(new VoteRequest("reply", reply.Id, value));
+    }
+
+    private async Task VoteAsync(VoteRequest request)
+    {
+        if (_busyVote)
+        {
+            return;
+        }
+
+        _busyVote = true;
+        try
+        {
+            var result = await Api.VoteAsync(request, _lifetime.Token);
+            if (!result.IsSuccess)
+            {
+                ShowNotice(result.Error?.Message ?? "Vote failed.", true);
+                return;
+            }
+
+            _feed = await Api.GetFeedAsync(_lifetime.Token);
+        }
+        catch
+        {
+            ShowNotice("Vote failed.", true);
+        }
+        finally
+        {
+            _busyVote = false;
+        }
+    }
+
+    private async Task LogoutAsync()
+    {
+        await Api.LogoutAsync(_lifetime.Token);
+        Navigation.NavigateTo("/", forceLoad: true);
+    }
+
+    private IEnumerable<PostDto> FilteredPosts()
+    {
+        if (string.IsNullOrWhiteSpace(_search))
+        {
+            return _feed.Posts;
+        }
+
+        return _feed.Posts.Where(post =>
+            (post.Title?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (post.Topic?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            post.Content.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            post.Replies.Any(reply => reply.Content.Contains(_search, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private int GetReplyDepth(PostDto post, ReplyDto reply)
+    {
+        var byId = post.Replies.ToDictionary(item => item.Id);
+        var depth = 0;
+        var parentId = reply.ParentReplyId;
+
+        while (parentId is not null && depth < 4 && byId.TryGetValue(parentId.Value, out var parent))
+        {
+            depth++;
+            parentId = parent.ParentReplyId;
+        }
+
+        return depth;
+    }
+
+    private void OpenShare(PostDto post, ReplyDto? reply = null)
+    {
+        var anchor = reply is null ? $"post-{post.Id:N}" : $"reply-{reply.Id:N}";
+        _shareUrl = $"{Navigation.BaseUri.TrimEnd('/')}?post={post.Id:N}#{anchor}";
+        _showShareModal = true;
+    }
+
+    private async Task CopyShareLinkAsync()
+    {
+        await JavaScript.InvokeVoidAsync("navigator.clipboard.writeText", _shareUrl);
+        _showShareModal = false;
+        ShowNotice("Link copied.", false);
+    }
+
+    private string GetLoginUrl(string provider)
+    {
+        return $"/auth/login/{Uri.EscapeDataString(provider)}?returnUrl=%2F";
+    }
+
+    private string GetAccountState()
+    {
+        if (_user.IsBanned) return "restricted";
+        return _user.IsAuthenticated ? "online" : "guest";
+    }
+
+    private static string GetAvatarClass(AuthorDto author)
+    {
+        return author.IsAi ? "avatar-ai" : "avatar-user";
+    }
+
+    private static string GetInitials(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "?";
+        }
+
+        return string.Concat(value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .Select(part => char.ToUpperInvariant(part[0])));
+    }
+
+    private static string FormatRelative(DateTimeOffset value)
+    {
+        var elapsed = DateTimeOffset.UtcNow - value;
+        if (elapsed.TotalSeconds < 45) return "just now";
+        if (elapsed.TotalMinutes < 60) return $"{(int)elapsed.TotalMinutes}m";
+        if (elapsed.TotalHours < 24) return $"{(int)elapsed.TotalHours}h";
+        if (elapsed.TotalDays < 7) return $"{(int)elapsed.TotalDays}d";
+        return value.ToLocalTime().ToString("MMM d, yyyy");
+    }
+
+    private void ToggleLoginMenu() => _showLoginMenu = !_showLoginMenu;
+    private void ToggleMemberPanel() => _showMemberPanel = !_showMemberPanel;
+    private void CloseShare() => _showShareModal = false;
+    private void DismissNotice() => _notice = null;
+
+    private void ShowNotice(string message, bool isError)
+    {
+        _notice = message;
+        _noticeIsError = isError;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _lifetime.CancelAsync();
+        if (_pollingTask is not null)
+        {
+            try
+            {
+                await _pollingTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        _lifetime.Dispose();
+    }
+}

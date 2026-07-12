@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EternalDiscord.Contracts/EternalDiscord.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/src/EternalDiscord/">
+    <Project Path="src/EternalDiscord/EternalDiscord.Client/EternalDiscord.Client.csproj" />
+    <Project Path="src/EternalDiscord/EternalDiscord/EternalDiscord.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EternalDiscord.Tests/EternalDiscord.Tests.csproj" />
+  </Folder>
+</Solution>

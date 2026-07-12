@@ -1,0 +1,11 @@
+AGENTS-README-FIRST.yaml
+.mcpServer/
+cache/
+mcp.db
+**/bin/
+**/obj/
+**/data/
+*.user
+*.suo
+*.db-log
+appsettings.Local.json

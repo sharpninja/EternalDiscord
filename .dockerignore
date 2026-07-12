@@ -1,0 +1,9 @@
+.git
+.mcpServer
+**/bin
+**/obj
+**/data
+tests
+*.user
+*.suo
+mcp.db
