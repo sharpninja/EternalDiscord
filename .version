@@ -1,0 +1,22 @@
+INFO [26-07-12 2:33:15:27] Applicable build agent found: 'LocalBuild'.
+INFO [26-07-12 2:33:15:33] Working directory: F:\GitHub\EternalDiscord
+INFO [26-07-12 2:33:15:38] Project root is: F:\GitHub\EternalDiscord\
+INFO [26-07-12 2:33:15:38] DotGit directory is: F:\GitHub\EternalDiscord\.git
+INFO [26-07-12 2:33:15:38] Branch from build environment: 
+INFO [26-07-12 2:33:15:40] -< Begin: Loading version variables from disk cache file F:\GitHub\EternalDiscord\.git\gitversion_cache\4A211B826899758BF189215916E865A4B0CDC5FA >-
+  INFO [26-07-12 2:33:15:40] Cache file F:\GitHub\EternalDiscord\.git\gitversion_cache\4A211B826899758BF189215916E865A4B0CDC5FA not found.
+INFO [26-07-12 2:33:15:40] -< End: Loading version variables from disk cache file F:\GitHub\EternalDiscord\.git\gitversion_cache\4A211B826899758BF189215916E865A4B0CDC5FA (Took: 0.51ms) >-
+INFO [26-07-12 2:33:15:42] Using latest commit on specified branch
+ERROR [26-07-12 2:33:15:45] An unexpected error occurred:
+GitVersion.GitVersionException: No commits found on the current branch.
+   at GitVersion.GitVersionContextFactory.Create(GitVersionOptions gitVersionOptions) in /_/src/GitVersion.Core/Core/GitVersionContextFactory.cs:line 28
+   at GitVersion.GitVersionCoreModule.<>c__DisplayClass0_0.<RegisterTypes>b__1() in /_/src/GitVersion.Core/GitVersionCoreModule.cs:line 30
+   at System.Lazy`1.ViaFactory(LazyThreadSafetyMode mode)
+   at System.Lazy`1.ExecutionAndPublication(LazyHelper executionAndPublication, Boolean useDefaultConstructor)
+   at System.Lazy`1.CreateValue()
+   at GitVersion.VersionCalculation.NextVersionCalculator.get_Context() in /_/src/GitVersion.Core/VersionCalculation/VersionCalculators/NextVersionCalculator.cs:line 25
+   at GitVersion.VersionCalculation.NextVersionCalculator.FindVersion() in /_/src/GitVersion.Core/VersionCalculation/VersionCalculators/NextVersionCalculator.cs:line 29
+   at GitVersion.GitVersionCalculateTool.CalculateVersionVariables() in /_/src/GitVersion.Core/Core/GitVersionCalculateTool.cs:line 45
+   at GitVersion.GitVersionExecutor.RunGitVersionTool(GitVersionOptions gitVersionOptions) in /_/src/GitVersion.App/GitVersionExecutor.cs:line 68
+INFO [26-07-12 2:33:15:45] Please run `git log --graph --format="%h %cr %d" --decorate --date=relative --all --remotes=*` to see the git graph. This can help you troubleshoot any issues.
+
