@@ -14,8 +14,16 @@ public static class AuthenticationExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // Behind the EternalSocial gateway (GATEWAY_KEY set), identity arrives as
+        // forwarded headers and the gateway scheme becomes the default; the cookie
+        // and provider registrations below remain for standalone use.
+        var gatewayKey = configuration["GATEWAY_KEY"];
+        var defaultScheme = string.IsNullOrWhiteSpace(gatewayKey)
+            ? CookieAuthenticationDefaults.AuthenticationScheme
+            : GatewayAuthenticationHandler.SchemeName;
+
         var authentication = services
-            .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+            .AddAuthentication(defaultScheme)
             .AddCookie(options =>
             {
                 options.Cookie.Name = "eternaldiscord.auth";
@@ -62,6 +70,13 @@ public static class AuthenticationExtensions
             "id",
             "name",
             "login");
+
+        if (!string.IsNullOrWhiteSpace(gatewayKey))
+        {
+            authentication.AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, GatewayAuthenticationHandler>(
+                GatewayAuthenticationHandler.SchemeName,
+                configureOptions: null);
+        }
 
         services.AddAuthorization();
         return services;
