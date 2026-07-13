@@ -19,8 +19,8 @@
     <style>
         /* Reserve room for the EternalSocial pinned footer; --es-footer-h is
            published by the gateway's injected footer and absent when the app
-           is reached directly, so this collapses to zero. */
-        body { padding-bottom: var(--es-footer-h, 0rem); }
+           is reached directly, so this collapses to zero. The shell owns the
+           whole reservation (body padding would add a dead scroll strip). */
         .discord-shell { height: calc(100dvh - var(--es-footer-h, 0rem)); }
     </style>
     @* Razor strips literal HTML comments from component output, so emit the
