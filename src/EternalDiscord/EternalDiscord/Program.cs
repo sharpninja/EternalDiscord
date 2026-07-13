@@ -48,6 +48,13 @@ var app = builder.Build();
 
 app.UseForwardedHeaders();
 
+// Behind the EternalSocial gateway the app is mounted under a path prefix
+// (for example /d). The proxy forwards the prefix unstripped; absorb it here.
+if (builder.Configuration["Proxy:PathBase"] is { Length: > 0 } pathBase)
+{
+    app.UsePathBase(pathBase.TrimEnd('/'));
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseWebAssemblyDebugging();
