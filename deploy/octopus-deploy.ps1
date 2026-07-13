@@ -22,17 +22,23 @@ function TeardownContainer($name) {
 $gatewayKey = $OctopusParameters['GATEWAY_KEY']
 if (-not $gatewayKey) { throw 'GATEWAY_KEY variable is not set (EternalSocial library set).' }
 
-# Git-sourced steps materialize the repo in the working directory; otherwise clone.
-# Explicit assignment (never a block-as-expression) so git output can't pollute $src.
-$src = "$PWD"
+# Git-sourced steps extract the repo one level ABOVE this script's folder and run the
+# script with CWD = the script's folder, so probe $PSScriptRoot's parent, then $PWD.
+$src = Split-Path -Parent $PSScriptRoot
+if (-not ($src -and (Test-Path (Join-Path $src 'Dockerfile')))) { $src = "$PWD" }
 if (-not (Test-Path (Join-Path $src 'Dockerfile'))) {
+    # Ad-hoc fallback: clone/refresh a working copy. git writes progress to stderr;
+    # cmd /c merges the streams outside PowerShell so EAP=Stop cannot treat it as fatal.
     $work = Join-Path $env:ProgramData 'EternalDiscord\src'
     New-Item -ItemType Directory -Force (Split-Path $work) | Out-Null
     if (Test-Path (Join-Path $work '.git')) {
-        git -C $work fetch --all --prune 2>&1 | Write-Host
-        git -C $work reset --hard origin/main 2>&1 | Write-Host
+        cmd /c "git -C ""$work"" fetch --all --prune 2>&1" | Write-Host
+        if ($LASTEXITCODE -ne 0) { throw "git fetch failed with exit code $LASTEXITCODE" }
+        cmd /c "git -C ""$work"" reset --hard origin/main 2>&1" | Write-Host
+        if ($LASTEXITCODE -ne 0) { throw "git reset failed with exit code $LASTEXITCODE" }
     } else {
-        git clone --branch main --depth 1 'https://github.com/sharpninja/EternalDiscord.git' $work 2>&1 | Write-Host
+        cmd /c "git clone --branch main --depth 1 https://github.com/sharpninja/EternalDiscord.git ""$work"" 2>&1" | Write-Host
+        if ($LASTEXITCODE -ne 0) { throw "git clone failed with exit code $LASTEXITCODE" }
     }
     $src = $work
 }
