@@ -22,19 +22,22 @@ function TeardownContainer($name) {
 $gatewayKey = $OctopusParameters['GATEWAY_KEY']
 if (-not $gatewayKey) { throw 'GATEWAY_KEY variable is not set (EternalSocial library set).' }
 
-$src = if (Test-Path (Join-Path $PWD 'Dockerfile')) { "$PWD" } else {
+# Git-sourced steps materialize the repo in the working directory; otherwise clone.
+# Explicit assignment (never a block-as-expression) so git output can't pollute $src.
+$src = "$PWD"
+if (-not (Test-Path (Join-Path $src 'Dockerfile'))) {
     $work = Join-Path $env:ProgramData 'EternalDiscord\src'
     New-Item -ItemType Directory -Force (Split-Path $work) | Out-Null
     if (Test-Path (Join-Path $work '.git')) {
-        git -C $work fetch --all --prune
-        git -C $work reset --hard origin/main
+        git -C $work fetch --all --prune 2>&1 | Write-Host
+        git -C $work reset --hard origin/main 2>&1 | Write-Host
     } else {
-        git clone --branch main --depth 1 'https://github.com/sharpninja/EternalDiscord.git' $work
+        git clone --branch main --depth 1 'https://github.com/sharpninja/EternalDiscord.git' $work 2>&1 | Write-Host
     }
-    $work
+    $src = $work
 }
 
-docker build -t $image $src
+docker build -t $image "$src"
 if ($LASTEXITCODE -ne 0) { throw "docker build (eternaldiscord) failed with exit code $LASTEXITCODE" }
 
 if (-not (docker network ls -q --filter "name=^$network$")) {
